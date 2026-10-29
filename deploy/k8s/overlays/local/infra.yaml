@@ -1,0 +1,211 @@
+# Throwaway dependencies for a local cluster only (no persistence, no HA, default credentials).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sanve-infra
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: sanve-infra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: "sanve"
+            - name: POSTGRES_PASSWORD
+              value: "sanve-local-password"
+            - name: POSTGRES_DB
+              value: "sanve"
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "sanve", "-d", "sanve"]
+            periodSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: sanve-infra
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: sanve-infra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.4.11-alpine
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: sanve-infra
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  namespace: sanve-infra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:4.1-management-alpine
+          ports:
+            - containerPort: 5672
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: "sanve"
+            - name: RABBITMQ_DEFAULT_PASS
+              value: "sanve-local-password"
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            periodSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: sanve-infra
+spec:
+  selector:
+    app: rabbitmq
+  ports:
+    - port: 5672
+      targetPort: 5672
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  namespace: sanve-infra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mailpit
+  template:
+    metadata:
+      labels:
+        app: mailpit
+    spec:
+      containers:
+        - name: mailpit
+          image: axllent/mailpit:v1.27
+          ports:
+            - containerPort: 1025
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  namespace: sanve-infra
+spec:
+  selector:
+    app: mailpit
+  ports:
+    - port: 1025
+      targetPort: 1025
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-gateway
+  namespace: sanve-infra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-gateway
+  template:
+    metadata:
+      labels:
+        app: payment-gateway
+    spec:
+      containers:
+        - name: payment-gateway
+          image: sanve-payment-gateway
+          ports:
+            - containerPort: 8090
+          env:
+            - name: WEBHOOK_URL
+              value: "http://sanve-api.sanve.svc.cluster.local/api/v1/webhooks/payments"
+            - name: PUBLIC_URL
+              value: "http://localhost:8090"
+            - name: FAILURE_RATE
+              value: "0.1"
+            - name: DUPLICATE_WEBHOOKS
+              value: "true"
+          envFrom:
+            - secretRef:
+                name: payment-gateway
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8090
+            periodSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-gateway
+  namespace: sanve-infra
+spec:
+  selector:
+    app: payment-gateway
+  ports:
+    - port: 8090
+      targetPort: 8090

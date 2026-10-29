@@ -1,0 +1,74 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Local cluster (kind / minikube): the base app plus throwaway PostgreSQL, Redis, RabbitMQ, Mailpit
+# and the fake payment gateway in namespace sanve-infra, using images from `docker compose build`.
+resources:
+  - ../../base
+  - infra.yaml
+
+images:
+  # Matches the name the base already rewrote to, not the original placeholder.
+  - name: ghcr.io/example/sanve-api
+    newName: sanve-api
+    newTag: local
+  - name: sanve-payment-gateway
+    newName: sanve-payment-gateway
+    newTag: local
+
+secretGenerator:
+  # Local-only values (same as .env.example). Real clusters never get secrets from Git.
+  - name: sanve-secrets
+    namespace: sanve
+    envs: [secrets.local.env]
+    options:
+      disableNameSuffixHash: true
+  - name: payment-gateway
+    namespace: sanve-infra
+    literals:
+      - API_KEY=dev-payment-api-key-change-me
+      - WEBHOOK_SECRET=dev-webhook-secret-change-me
+    options:
+      disableNameSuffixHash: true
+
+patches:
+  - path: config.patch.yaml
+  - target:
+      kind: Deployment
+      name: sanve-(api|worker|scheduler)
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: sanve-api
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+  - target:
+      kind: PodDisruptionBudget
+      name: sanve-api
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 0
+  - target:
+      kind: Job
+      name: sanve-migrate
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/command
+        value: ["sh", "-c", "alembic upgrade head && python -m app.cli bootstrap-admin"]
+  - target:
+      kind: Ingress
+      name: sanve-api
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: sanve.localhost
+      - op: remove
+        path: /spec/tls
+      - op: remove
+        path: /metadata/annotations/cert-manager.io~1cluster-issuer

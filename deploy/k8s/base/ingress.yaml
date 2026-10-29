@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sanve-api
+  annotations:
+    # Coarse per-IP protection at the edge; fair per-user limits are enforced by the API (Redis).
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/proxy-body-size: 1m
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [api.sanve.example]
+      secretName: sanve-api-tls
+  rules:
+    - host: api.sanve.example
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sanve-api
+                port:
+                  name: http

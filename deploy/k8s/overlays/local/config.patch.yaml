@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sanve-config
+  namespace: sanve
+data:
+  ENV: local
+  PAYMENT_BASE_URL: http://payment-gateway.sanve-infra.svc.cluster.local:8090
+  SMTP_HOST: mailpit.sanve-infra.svc.cluster.local
+  SMTP_PORT: "1025"
+  OTEL_EXPORTER_OTLP_ENDPOINT: ""
